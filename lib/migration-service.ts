@@ -5,6 +5,7 @@ import {
     HeadObjectCommand
 } from '@aws-sdk/client-s3';
 import { SupabaseConfig, CloudflareConfig, initSupabaseClient, initCloudflareR2Client } from './storage-utils';
+import { migrateFileToR2 } from '@/actions/migrate';
 
 export interface MigrationFile {
     path: string;
@@ -237,107 +238,32 @@ export class MigrationService {
     }
 
     /**
-     * Upload a file to Cloudflare R2 via the API endpoint instead of direct access
+     * Upload a file to R2 via the server action
      */
     private async uploadToR2(path: string): Promise<void> {
-        // Check if r2Client is initialized
-        if (!this.r2Client) {
-            throw new Error("Cloudflare R2 client is not initialized. Please connect to Cloudflare R2 first.");
-        }
-        
-        // Normalize the path
         const normalizedPath = this.normalizePath(path);
-        
-        // Use the API endpoint to avoid CORS issues
         try {
-            console.log(`Starting migration for file: ${normalizedPath}`);
-            
-            // Create a clean version of the configs with only the necessary properties
-            // to avoid circular references and non-serializable data
-            const cleanSupabaseConfig = {
-                supabaseUrl: this.supabaseConfig.supabaseUrl,
-                supabaseKey: this.supabaseConfig.supabaseKey,
-                bucketName: this.supabaseConfig.bucketName
-            };
-            
-            const cleanCloudflareConfig = {
-                accountId: this.cloudflareConfig.accountId,
-                accessKeyId: this.cloudflareConfig.accessKeyId,
-                secretAccessKey: this.cloudflareConfig.secretAccessKey,
-                bucketName: this.cloudflareConfig.bucketName
-            };
-            
-            console.log(`Preparing request payload for: ${normalizedPath}`);
-            
-            // Create request payload
-            const payload = {
-                supabaseConfig: cleanSupabaseConfig,
-                cloudflareConfig: cleanCloudflareConfig,
-                filePath: normalizedPath
-            };
-            
-            // Convert to JSON with error handling
-            let jsonPayload;
-            try {
-                jsonPayload = JSON.stringify(payload);
-                console.log(`Successfully serialized payload for: ${normalizedPath}`);
-            } catch (jsonError) {
-                console.error('JSON serialization error:', jsonError);
-                throw new Error(`Failed to serialize request data: ${jsonError instanceof Error ? jsonError.message : 'Unknown error'}`);
-            }
-            
-            console.log(`Sending fetch request to migrate: ${normalizedPath}`);
-            
-            // Make the fetch request with timeout
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+            console.log(`Preparing to upload ${normalizedPath} to R2 via server action`);
             
             try {
-                const response = await fetch('/api/migrate-to-r2', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: jsonPayload,
-                    signal: controller.signal
-                });
-                
-                clearTimeout(timeoutId);
-                
-                console.log(`Received response for ${normalizedPath} with status: ${response.status}`);
-                
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error(`Error response for ${normalizedPath}:`, errorText);
-                    
-                    try {
-                        const errorJson = JSON.parse(errorText);
-                        throw new Error(errorJson.error || `Failed to upload file to R2 (${response.status})`);
-                    } catch {
-                        // If parsing JSON fails, use the raw text
-                        throw new Error(`Failed to upload file to R2: ${errorText || response.statusText}`);
-                    }
-                }
-                
-                const result = await response.json();
-                console.log(`Successfully parsed JSON response for: ${normalizedPath}`);
+                const result = await migrateFileToR2(
+                    this.supabaseConfig,
+                    this.cloudflareConfig as CloudflareConfig,
+                    normalizedPath
+                );
                 
                 if (!result.success) {
-                    console.error(`API reported failure for ${normalizedPath}:`, result.error);
+                    console.error(`Error response for ${normalizedPath}:`, result.error);
                     throw new Error(result.error || 'Failed to upload file to R2');
                 }
                 
                 console.log(`Successfully migrated: ${normalizedPath}`);
-            } catch (fetchError: unknown) {
-                clearTimeout(timeoutId);
-                if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-                    console.error(`Request timeout for ${normalizedPath}`);
-                    throw new Error(`Request timed out after 30 seconds for file: ${normalizedPath}`);
-                }
-                throw fetchError;
+            } catch (error) {
+                console.error(`Error uploading ${normalizedPath} to R2:`, error);
+                throw error;
             }
         } catch (error) {
-            console.error(`Error uploading ${normalizedPath} to R2 via API:`, error);
+            console.error(`Error uploading ${normalizedPath} to R2:`, error);
             throw error;
         }
     }

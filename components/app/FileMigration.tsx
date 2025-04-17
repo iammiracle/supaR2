@@ -1,6 +1,9 @@
+'use client';
+
 import { useReducer, useEffect } from 'react';
 import { MigrationService, MigrationFile, MigrationProgress } from '../../lib/migration-service';
 import { SupabaseConfig, CloudflareConfig } from '../../lib/storage-utils';
+import { migrateFileToR2 } from '@/actions/migrate';
 
 interface FileMigrationProps {
     supabaseConfig: SupabaseConfig;
@@ -186,52 +189,32 @@ export default function FileMigration({
     };
 
     const startMigration = async () => {
-        if (!state.migrationService) return;
-        
-        const selectedFiles = state.files.filter(file => file.selected);
-        if (selectedFiles.length === 0) {
-            alert('Please select at least one file to migrate');
-            return;
-        }
-        
         try {
-            // Create a modified version of migrateFiles to track currently migrating file
+            const selectedFiles = state.files.filter(file => file.selected);
+            if (selectedFiles.length === 0) {
+                alert('Please select at least one file to migrate');
+                return;
+            }
+            
+            const totalFiles = selectedFiles.length;
+            let completed = 0;
+            let failed = 0;
+            const errors: Record<string, string> = {};
+            
+            // This function will track migration progress
             const migrateFilesWithTracking = async (files: MigrationFile[]) => {
-                const totalFiles = files.length;
-                let completed = 0;
-                let failed = 0;
-                const errors: Record<string, string> = {};
-                
-                // Set migration as in progress
-                const progress: MigrationProgress = {
-                    total: totalFiles,
-                    completed: 0,
-                    failed: 0,
-                    errors: {},
-                    inProgress: true
-                };
-                
-                dispatch({ type: 'SET_MIGRATION_PROGRESS', payload: progress });
                 
                 for (const file of files) {
                     // Set currently migrating file
                     dispatch({ type: 'SET_CURRENTLY_MIGRATING', payload: file.path });
                     
                     try {
-                        // Call the API to migrate the file
-                        const response = await fetch('/api/migrate-to-r2', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                                supabaseConfig: supabaseConfig,
-                                cloudflareConfig: cloudflareConfig,
-                                filePath: file.path
-                            }),
-                        });
-                        
-                        const result = await response.json();
+                        // Use the server action instead of the API
+                        const result = await migrateFileToR2(
+                            supabaseConfig,
+                            cloudflareConfig,
+                            file.path
+                        );
                         
                         if (result.success) {
                             completed++;

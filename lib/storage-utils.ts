@@ -1,3 +1,5 @@
+"use client";
+
 import { createClient } from '@supabase/supabase-js';
 import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
 import { z } from 'zod';
@@ -123,46 +125,64 @@ export async function checkR2BucketExists(client: S3Client, bucketName: string):
     }
 }
 
-// Save configuration to local storage
-export function saveSupabaseConfig(config: SupabaseConfig): void {
+// Save Supabase configuration to localStorage
+export function saveSupabaseConfig(config: SupabaseConfig) {
     if (typeof window !== 'undefined') {
         localStorage.setItem(STORAGE_KEYS.SUPABASE_CONFIG, JSON.stringify(config));
     }
 }
 
-export function saveCloudflareConfig(config: CloudflareConfig): void {
+// Load Supabase configuration from localStorage
+export function loadSupabaseConfig(): SupabaseConfig | null {
+    if (typeof window !== 'undefined') {
+        const config = localStorage.getItem(STORAGE_KEYS.SUPABASE_CONFIG);
+        if (config) {
+            try {
+                return JSON.parse(config) as SupabaseConfig;
+            } catch (e) {
+                console.error('Failed to parse Supabase config:', e);
+            }
+        }
+    }
+    return null;
+}
+
+// Save Cloudflare configuration to localStorage
+export function saveCloudflareConfig(config: CloudflareConfig) {
     if (typeof window !== 'undefined') {
         localStorage.setItem(STORAGE_KEYS.CLOUDFLARE_CONFIG, JSON.stringify(config));
     }
 }
 
-// Load configuration from local storage
-export function loadSupabaseConfig(): SupabaseConfig | null {
+// Load Cloudflare configuration from localStorage
+export function loadCloudflareConfig(): CloudflareConfig | null {
     if (typeof window !== 'undefined') {
-        const configString = localStorage.getItem(STORAGE_KEYS.SUPABASE_CONFIG);
-        if (configString) {
+        const config = localStorage.getItem(STORAGE_KEYS.CLOUDFLARE_CONFIG);
+        if (config) {
             try {
-                return JSON.parse(configString);
-            } catch (error) {
-                console.error('Error parsing Supabase config from localStorage:', error);
+                return JSON.parse(config) as CloudflareConfig;
+            } catch (e) {
+                console.error('Failed to parse Cloudflare config:', e);
             }
         }
     }
     return null;
 }
 
-export function loadCloudflareConfig(): CloudflareConfig | null {
-    if (typeof window !== 'undefined') {
-        const configString = localStorage.getItem(STORAGE_KEYS.CLOUDFLARE_CONFIG);
-        if (configString) {
-            try {
-                return JSON.parse(configString);
-            } catch (error) {
-                console.error('Error parsing Cloudflare config from localStorage:', error);
-            }
-        }
+// Get environment variable or fallback
+export function getEnvVar(key: string, fallback: string = ''): string {
+    if (typeof process !== 'undefined' && process.env) {
+        return process.env[key] || fallback;
     }
-    return null;
+    return fallback;
+}
+
+// Load migration mode from localStorage
+export function loadMigrationMode(): string {
+    if (typeof window !== 'undefined') {
+        return localStorage.getItem('migration_mode') || 'files';
+    }
+    return 'files';
 }
 
 // Load configs from environment variables if available (and not in localStorage)

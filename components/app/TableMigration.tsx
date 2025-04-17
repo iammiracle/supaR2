@@ -1,6 +1,16 @@
-import { useReducer, useEffect, useState } from 'react';
+'use client';
+
+import { useReducer, useEffect, useState, useMemo } from 'react';
 import { SupabaseClient } from '@supabase/supabase-js';
-import { SupabaseConfig, CloudflareConfig, initSupabaseClient } from '../../lib/storage-utils';
+import { 
+  SupabaseConfig, 
+  CloudflareConfig, 
+  initSupabaseClient,
+  SupabaseConfigSchema,
+  CloudflareConfigSchema 
+} from '../../lib/storage-utils';
+import { MigrationProgress } from '@/lib/migration-service';
+import { migrateFileToR2 } from '@/actions/migrate';
 
 interface TableMigrationProps {
     supabaseConfig: SupabaseConfig;
@@ -36,15 +46,6 @@ interface TableMigrationState {
     totalMigratedCount: number;
     totalFailedCount: number;
     supabaseConfig: SupabaseConfig | null;
-}
-
-// Define migration progress interface
-interface MigrationProgress {
-    total: number;
-    completed: number;
-    failed: number;
-    inProgress: boolean;
-    errors: Record<string, string>;
 }
 
 // Initial state
@@ -142,6 +143,9 @@ export default function TableMigration({
     
     // State for image column selection
     const [selectedImageColumn, setSelectedImageColumn] = useState<string | null>(null);
+    
+    // State for file path pattern
+    const [filePathPattern, setFilePathPattern] = useState<string>('');
 
     // Initialize Supabase client
     useEffect(() => {
@@ -273,10 +277,11 @@ export default function TableMigration({
         dispatch({ type: 'SET_LOADING_ERROR', payload: null });
         
         try {
-            // Get all rows from the table
+            // Get all rows from the table with explicit ordering by id
             const { data, error } = await state.supabaseClient
                 .from(tableName)
                 .select('*')
+                .order('id', { ascending: true })  // Add explicit ordering by id
                 .limit(100); // Limit to 100 rows for performance
                 
             if (error) throw error;
@@ -349,15 +354,19 @@ export default function TableMigration({
             
             dispatch({ type: 'SET_MIGRATION_PROGRESS', payload: progress });
             
-            // Process each selected row
+            // We're processing sequentially to avoid overwhelming the server
             for (const row of selectedRows) {
-                // Skip if there's no image URL in this row
-                const imageUrl = row[selectedImageColumn];
-                if (!imageUrl || typeof imageUrl !== 'string' || !imageUrl.trim()) {
-                    // Count as failed
+                // Skip already migrated rows
+                if (state.migratedRows?.has(row.id)) {
+                    progress.completed++;
+                    continue;
+                }
+                
+                // Get the image URL from the selected column
+                const imageUrl = row[selectedImageColumn] as string;
+                if (!imageUrl) {
                     progress.failed++;
-                    progress.errors[row.id] = `No valid image URL found in the "${selectedImageColumn}" column`;
-                    dispatch({ type: 'SET_MIGRATION_PROGRESS', payload: {...progress} });
+                    progress.errors[row.id] = 'No image URL found in selected column';
                     continue;
                 }
                 
@@ -392,20 +401,24 @@ export default function TableMigration({
                         throw new Error('Could not extract file path from URL');
                     }
                     
-                    // Call the API to migrate the file
-                    const response = await fetch('/api/migrate-to-r2', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            supabaseConfig: supabaseConfig,
-                            cloudflareConfig: cloudflareConfig,
-                            filePath: filePath
-                        }),
-                    });
+                    // Manually ensure the configs are valid before passing to migrateFileToR2
+                    // Use Zod validation locally - this will catch any issues early
+                    const validSupabaseConfig = SupabaseConfigSchema.safeParse(supabaseConfig);
+                    if (!validSupabaseConfig.success) {
+                        throw new Error(`Invalid Supabase config: ${validSupabaseConfig.error.message}`);
+                    }
                     
-                    const result = await response.json();
+                    const validCloudflareConfig = CloudflareConfigSchema.safeParse(cloudflareConfig);
+                    if (!validCloudflareConfig.success) {
+                        throw new Error(`Invalid Cloudflare config: ${validCloudflareConfig.error.message}`);
+                    }
+                    
+                    // Call the server action to migrate the file
+                    const result = await migrateFileToR2(
+                        validSupabaseConfig.data,  // Use the validated data
+                        validCloudflareConfig.data,  // Use the validated data
+                        filePath
+                    );
                     
                     if (result.success) {
                         // Get the new URL from R2
@@ -490,6 +503,23 @@ export default function TableMigration({
         return state.currentlyMigratingRow === rowId;
     };
 
+    // Filter rows based on file path pattern
+    const filteredRows = useMemo(() => {
+        if (!filePathPattern || !selectedImageColumn) {
+            return state.rows;
+        }
+        
+        return state.rows.filter(row => {
+            const imageUrl = row[selectedImageColumn] as string;
+            if (!imageUrl || typeof imageUrl !== 'string') {
+                return false;
+            }
+            
+            // Case-insensitive matching
+            return imageUrl.toLowerCase().includes(filePathPattern.toLowerCase());
+        });
+    }, [state.rows, filePathPattern, selectedImageColumn]);
+
     // Load tables from the database
     const loadTables = async () => {
         if (!state.supabaseClient) return;
@@ -498,67 +528,29 @@ export default function TableMigration({
         dispatch({ type: 'SET_LOADING_ERROR', payload: null });
         
         try {
-            // Skip problematic queries that we know often fail and cause 404 errors
-            // Instead, directly use the API endpoint approach which works reliably
-            try {
-                const response = await fetch('/api/tables', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        supabaseUrl: supabaseConfig.supabaseUrl,
-                        supabaseKey: supabaseConfig.supabaseKey,
-                        bucketName: supabaseConfig.bucketName
-                    }),
-                });
+            // We already have the table name from the connection dialog
+            if (supabaseConfig.bucketName) {
+                // Create a TableInfo object for the specified table
+                const tableInfo = { 
+                    name: supabaseConfig.bucketName, 
+                    columns: [], 
+                    imageColumns: [] 
+                };
                 
-                const responseData = await response.json();
+                // Set the tables array with our single table
+                dispatch({ type: 'SET_TABLES', payload: [tableInfo] });
                 
-                if (responseData.tables && responseData.tables.length > 0) {
-                    // Convert raw table names to TableInfo objects
-                    const tableInfos = responseData.tables.map((name: string) => ({ 
-                        name, 
-                        columns: [], 
-                        imageColumns: [] 
-                    }));
-                    
-                    dispatch({ type: 'SET_TABLES', payload: tableInfos });
-                    
-                    // If we received a bucketName from the config, use it as the selected table
-                    if (supabaseConfig.bucketName) {
-                        const matchingTable = tableInfos.find(
-                            (t: TableInfo) => t.name === supabaseConfig.bucketName
-                        );
-                        
-                        if (matchingTable) {
-                            dispatch({ type: 'SET_SELECTED_TABLE', payload: supabaseConfig.bucketName });
-                            loadColumns(supabaseConfig.bucketName);
-                        } else if (tableInfos.length > 0) {
-                            // Or select the first table
-                            dispatch({ type: 'SET_SELECTED_TABLE', payload: tableInfos[0].name });
-                            loadColumns(tableInfos[0].name);
-                        }
-                    } else if (tableInfos.length > 0) {
-                        // If no bucketName, select the first table
-                        dispatch({ type: 'SET_SELECTED_TABLE', payload: tableInfos[0].name });
-                        loadColumns(tableInfos[0].name);
-                    }
-                } else {
-                    dispatch({
-                        type: 'SET_LOADING_ERROR',
-                        payload: 'No tables found in the database. Create a table first.'
-                    });
-                }
-            } catch (apiError) {
-                console.error('API error:', apiError);
+                // Set the selected table and load its columns
+                dispatch({ type: 'SET_SELECTED_TABLE', payload: supabaseConfig.bucketName });
+                loadColumns(supabaseConfig.bucketName);
+            } else {
                 dispatch({
                     type: 'SET_LOADING_ERROR',
-                    payload: 'Error fetching tables: ' + (apiError instanceof Error ? apiError.message : String(apiError))
+                    payload: 'No table specified. Please reconnect and specify a table name.'
                 });
             }
         } catch (error) {
-            console.error('Error loading tables:', error);
+            console.error('Error loading table:', error);
             let errorMessage = 'An unknown error occurred';
             if (error instanceof Error) {
                 errorMessage = error.message;
@@ -694,11 +686,11 @@ export default function TableMigration({
                                                     </option>
                                                 ))}
                                             </select>
-                                            {state.tables.length > 0 && state.tables[0]?.imageColumns.length === 0 && !state.loading && (
+                                            {/* {state.tables.length > 0 && state.tables[0]?.imageColumns.length === 0 && !state.loading && (
                                                 <p className="mt-1 text-xs text-gray-500">
                                                     No image columns found in this table. A table must have text or varchar columns to store image URLs. This error can also occur if your database credentials don&apos;t have permission to query table structure or if there&apos;s no data in the table yet.
                                                 </p>
-                                            )}
+                                            )} */}
                                             <p className="mt-1 text-xs text-gray-500">
                                                 Select the column containing image URLs to migrate
                                             </p>
@@ -713,7 +705,9 @@ export default function TableMigration({
                                                 type="text"
                                                 id="file-pattern"
                                                 className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-                                                placeholder="e.g., images/*.jpg"
+                                                placeholder="e.g., supabase.co or storage/v1/"
+                                                value={filePathPattern}
+                                                onChange={(e) => setFilePathPattern(e.target.value)}
                                             />
                                             <p className="mt-1 text-xs text-gray-500">
                                                 Specify a pattern to filter files (leave empty for all files)
@@ -764,7 +758,7 @@ export default function TableMigration({
                                                 </p>
                                             </div>
                                         </div>
-                                    ) : state.selectedTable && state.rows.length > 0 ? (
+                                    ) : state.selectedTable && filteredRows.length > 0 ? (
                                         <div className="border border-gray-200 rounded-md bg-white p-4">
                                             <h4 className="text-sm font-medium text-gray-900 mb-2">Migration Progress</h4>
                                             
@@ -789,7 +783,7 @@ export default function TableMigration({
                                                     </div>
                                                     <div className="text-right">
                                                         <span className="text-xs font-semibold inline-block text-indigo-600">
-                                                            {state.migrationProgress ? (state.migrationProgress.completed + state.migrationProgress.failed) : 0} / {state.migrationProgress ? state.migrationProgress.total : state.rows.filter(r => r.selected).length || 0}
+                                                            {state.migrationProgress ? (state.migrationProgress.completed + state.migrationProgress.failed) : 0} / {state.migrationProgress ? state.migrationProgress.total : filteredRows.filter(r => r.selected).length || 0}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -809,7 +803,7 @@ export default function TableMigration({
                                             
                                             <div className="grid grid-cols-3 gap-2 text-center mb-2">
                                                 <div className="bg-gray-50 rounded p-2">
-                                                    <p className="text-sm font-medium text-gray-900">{state.migrationProgress ? state.migrationProgress.total : state.rows.filter(r => r.selected).length || 0}</p>
+                                                    <p className="text-sm font-medium text-gray-900">{state.migrationProgress ? state.migrationProgress.total : filteredRows.filter(r => r.selected).length}</p>
                                                     <p className="text-xs text-gray-500">Selected Rows</p>
                                                 </div>
                                                 <div className="bg-green-50 rounded p-2">
@@ -869,13 +863,14 @@ export default function TableMigration({
                         {/* Full Width Data Table */}
                         <div className="mt-6">
                             {/* Row Table Display */}
-                            {state.selectedTable && selectedImageColumn && state.rows.length > 0 && (
+                            {state.selectedTable && selectedImageColumn && filteredRows.length > 0 && (
                                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                                     <div className="flex justify-between p-2 bg-gray-50 border-b border-gray-200">
                                         <div className="flex items-center">
                                             
                                             <span className="text-sm font-medium text-gray-700">
-                                                {state.rows.filter(r => r.selected).length} of {state.rows.length} rows selected
+                                                {filteredRows.filter(r => r.selected).length} of {filteredRows.length} rows displayed
+                                                {filePathPattern && ` (filtered from ${state.rows.length} total)`}
                                             </span>
                                         </div>
                                         
@@ -883,7 +878,7 @@ export default function TableMigration({
                                             <button
                                                 type="button"
                                                 onClick={startMigration}
-                                                disabled={state.rows.filter(r => r.selected).length === 0 || state.migrationProgress?.inProgress}
+                                                disabled={filteredRows.filter(r => r.selected).length === 0 || state.migrationProgress?.inProgress}
                                                 className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                                             >
                                                 {state.migrationProgress?.inProgress ? (
@@ -911,7 +906,7 @@ export default function TableMigration({
                                                                 type="checkbox"
                                                                 className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded mr-2"
                                                                 onChange={(e) => e.target.checked ? selectAll() : deselectAll()}
-                                                                checked={state.rows.length > 0 && state.rows.every(r => r.selected)}
+                                                                checked={filteredRows.length > 0 && filteredRows.every(r => r.selected)}
                                                             />
                                                         )}
                                                         <span className="sr-only">Select</span>
@@ -928,7 +923,7 @@ export default function TableMigration({
                                                 </tr>
                                             </thead>
                                             <tbody className="bg-white divide-y divide-gray-200">
-                                                {state.rows.map((row) => (
+                                                {filteredRows.map((row) => (
                                                     <tr key={row.id} className="hover:bg-gray-50">
                                                         <td className="px-6 py-4 whitespace-nowrap">
                                                             <input
@@ -979,14 +974,16 @@ export default function TableMigration({
                                 </div>
                             )}
                             
-                            {state.selectedTable && selectedImageColumn && state.rows.length === 0 && !state.loading && (
+                            {state.selectedTable && selectedImageColumn && filteredRows.length === 0 && !state.loading && (
                                 <div className="text-center p-8 border border-gray-200 rounded-lg">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
                                     </svg>
                                     <h3 className="mt-2 text-sm font-medium text-gray-900">No rows found</h3>
                                     <p className="mt-1 text-sm text-gray-500">
-                                        This table doesn&apos;t seem to have any rows with image data.
+                                        {filePathPattern 
+                                            ? `No rows match the filter pattern: "${filePathPattern}"`
+                                            : "This table doesn't seem to have any rows with image data."}
                                     </p>
                                 </div>
                             )}

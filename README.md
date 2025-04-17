@@ -17,8 +17,10 @@ SupaR2 simplifies the migration process between Supabase Storage and Cloudflare 
 - **Custom Domain Support**: Use your own domain for Cloudflare R2 URLs
 - **Batch Processing**: Select multiple files or rows to migrate in batches
 - **Progress Tracking**: Monitor migration status with detailed progress information
+- **URL Filtering**: Filter table rows by URL patterns to find specific assets
 - **Error Handling**: Comprehensive error reporting for failed migrations
 - **Responsive UI**: Modern interface that works across devices
+- **Well-Organized Code**: Clean architecture with consistent 4-space indentation and modular stores
 
 ## Getting Started
 
@@ -75,9 +77,10 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to access 
 1. Connect to both Supabase and Cloudflare R2
 2. Select the database table containing image URLs
 3. Choose the column containing image URLs
-4. Select the rows to migrate
-5. Click "Migrate Selected Rows"
-6. The application will extract the file paths from URLs, migrate the files, and update the table with new R2 URLs
+4. Optionally use the File Path Pattern field to filter URLs (e.g., "supabase.co" or "storage/v1/")
+5. Select the rows to migrate
+6. Click "Migrate Selected Rows"
+7. The application will extract the file paths from URLs, migrate the files, and update the table with new R2 URLs
 
 ## Troubleshooting
 
@@ -92,6 +95,15 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to access 
 - Review the Error Details section for specific error messages
 - Ensure the image URLs in your tables are correctly formatted
 - Verify that the source files exist in Supabase Storage
+
+## Architecture
+
+The application is built with a modern React architecture:
+
+- **Server Actions**: Next.js server actions for secure, type-safe API calls
+- **Connection Store**: Centralized state management using Zustand with persistence
+- **Component Isolation**: Each component maintains its own state using React hooks
+- **Hydration Management**: Careful handling of client/server state to prevent hydration mismatches
 
 ## License
 
