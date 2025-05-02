@@ -2,8 +2,6 @@
 
 A powerful migration utility for transferring files and image URLs from Supabase Storage to Cloudflare R2.
 
-![SupaR2 Logo](/public/supaR2.png)
-
 ## Overview
 
 SupaR2 simplifies the migration process between Supabase Storage and Cloudflare R2, offering two migration modes:
