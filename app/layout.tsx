@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
+import { Geist, Geist_Mono, League_Spartan } from "next/font/google";
 import "./globals.css";
-import Providers from "@/app/provider";
 
 
 const geistSans = Geist({
@@ -14,8 +13,8 @@ const geistMono = Geist_Mono({
     subsets: ["latin"],
 });
 
-const spaceGrotesk = Space_Grotesk({
-    variable: "--font-space-grotesk",
+const leagueSpartan = League_Spartan({
+    variable: "--font-league-spartan",
     subsets: ["latin"],
     display: "swap",
 });
@@ -29,12 +28,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     return (
         <html lang="en">
             <body 
-                className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} antialiased`}
+                className={`${geistSans.variable} ${geistMono.variable} ${leagueSpartan.variable} antialiased`}
                 suppressHydrationWarning
             >
-                <Providers>
-                    {children}
-                </Providers>
+                {children}
             </body>
         </html>
     );

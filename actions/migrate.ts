@@ -12,7 +12,9 @@ import { z } from 'zod';
 const ServerSupabaseConfigSchema = z.object({
     supabaseUrl: z.string().url('Invalid Supabase URL'),
     supabaseKey: z.string().min(1, 'Supabase service role key is required'),
-    bucketName: z.string().min(1, 'Bucket name is required')
+    bucketName: z.string().min(1, 'Storage bucket name is required'),
+    tableName: z.string().optional(),
+    primaryKeyColumn: z.string().optional(),
 });
 
 const ServerCloudflareConfigSchema = z.object({
@@ -37,6 +39,23 @@ function normalizePath(path: string): string {
     }
     
     return normalized;
+}
+
+function buildPublicR2Url(cloudflareConfig: CloudflareConfig, normalizedPath: string): string | undefined {
+    if (cloudflareConfig.publicUrlPattern?.trim()) {
+        return cloudflareConfig.publicUrlPattern.trim().replace('{path}', normalizedPath);
+    }
+
+    if (!cloudflareConfig.customDomain?.trim()) {
+        return undefined;
+    }
+
+    const customDomain = cloudflareConfig.customDomain.trim().replace(/\/+$/, '');
+    const baseUrl = customDomain.startsWith('http://') || customDomain.startsWith('https://')
+        ? customDomain
+        : `https://${customDomain}`;
+
+    return `${baseUrl}/${normalizedPath}`;
 }
 
 /**
@@ -132,13 +151,7 @@ export async function migrateFileToR2(
                 
                 console.log(`Successfully migrated ${normalizedFilePath}`);
                 
-                // Generate the URL with the custom domain if available
-                let fileUrl;
-                if (validCloudflareConfig.customDomain) {
-                    fileUrl = `https://${validCloudflareConfig.customDomain}/${normalizedFilePath}`;
-                } else {
-                    fileUrl = `https://${validCloudflareConfig.bucketName}.${validCloudflareConfig.accountId}.r2.cloudflarestorage.com/${normalizedFilePath}`;
-                }
+                const fileUrl = buildPublicR2Url(validCloudflareConfig, normalizedFilePath);
                 
                 return { 
                     success: true,

@@ -190,6 +190,11 @@ export default function FileMigration({
 
     const startMigration = async () => {
         try {
+            if (!isCloudflareConnected) {
+                alert('Please connect to Cloudflare R2 first');
+                return;
+            }
+
             const selectedFiles = state.files.filter(file => file.selected);
             if (selectedFiles.length === 0) {
                 alert('Please select at least one file to migrate');
@@ -323,7 +328,7 @@ export default function FileMigration({
     };
 
     return (
-        <div className="mt-4 bg-white border border-gray-200 rounded-md overflow-hidden shadow-sm">
+        <div className="mt-4 bg-white border border-gray-200 rounded-xs overflow-hidden shadow-sm">
             <div className="border-b border-gray-200 bg-gray-50 px-4 py-3 sm:px-6">
                 <div className="flex items-center justify-between">
                     <div>
@@ -338,7 +343,7 @@ export default function FileMigration({
                         type="button"
                         onClick={loadFiles}
                         disabled={state.loading || !state.migrationService}
-                        className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                        className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-xs shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -349,8 +354,8 @@ export default function FileMigration({
             </div>
 
             <div className="px-4 py-5 sm:p-6">
-                {!isSupabaseConnected ? (
-                    <div className="p-4 border border-yellow-300 bg-yellow-50 rounded-md">
+                {!isSupabaseConnected && (
+                    <div className="mb-4 p-4 border border-yellow-300 bg-yellow-50 rounded-xs">
                         <p className="text-sm text-yellow-700 flex items-center">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
                                 <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
@@ -358,10 +363,10 @@ export default function FileMigration({
                             Please connect to Supabase to view and migrate files
                         </p>
                     </div>
-                ) : (
-                    <>
-                        {!isCloudflareConnected && (
-                            <div className="mb-4 p-3 border border-amber-200 bg-amber-50 rounded-md">
+                )}
+
+                {isSupabaseConnected && !isCloudflareConnected && (
+                            <div className="mb-4 p-3 border border-amber-200 bg-amber-50 rounded-xs">
                                 <p className="text-sm text-amber-700 flex items-center">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
                                         <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9a1 1 0 00-1-1z" clipRule="evenodd" />
@@ -369,7 +374,7 @@ export default function FileMigration({
                                     <span className="font-medium">Note:</span> File browsing is available, but migration requires Cloudflare R2 connection
                                 </p>
                             </div>
-                        )}
+                )}
                         
                         
                         {/* File Table and Migration Controls - Bottom Row */}
@@ -377,7 +382,7 @@ export default function FileMigration({
                             {/* File Browser Table - Left Side (takes 8/12 of the width) */}
                             <div className="lg:col-span-8">
                                 {state.loadingError && (
-                                    <div className="p-4 mb-4 text-sm text-red-700 bg-red-50 rounded-md border border-red-200" role="alert">
+                                    <div className="p-4 mb-4 text-sm text-red-700 bg-red-50 rounded-xs border border-red-200" role="alert">
                                         <div className="flex items-center">
                                             <svg className="w-5 h-5 mr-2 text-red-500" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                                                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9a1 1 0 00-1-1z" clipRule="evenodd"></path>
@@ -388,14 +393,14 @@ export default function FileMigration({
                                 )}
                                 
                                 {state.loading ? (
-                                    <div className="flex justify-center items-center py-12 border-2 border-dashed border-gray-200 rounded-lg">
+                                    <div className="flex justify-center items-center py-12 border-2 border-dashed border-gray-200 rounded-xs">
                                         <div className="flex flex-col items-center">
-                                            <div className="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mb-4 border-t-indigo-500 animate-spin"></div>
+                                            <div className="loader ease-linear rounded-xs border-4 border-t-4 border-gray-200 h-12 w-12 mb-4 border-t-indigo-500 animate-spin"></div>
                                             <p className="text-sm text-gray-500">Loading files from Supabase...</p>
                                         </div>
                                     </div>
                                 ) : state.files.length > 0 ? (
-                                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                                    <div className="border border-gray-200 rounded-xs overflow-hidden">
                                         <div className="flex justify-between p-2 bg-gray-50 border-b border-gray-200">
                                             <div className="flex items-center">
                                                 <span className="text-sm font-medium text-gray-700">
@@ -405,8 +410,8 @@ export default function FileMigration({
                                             <button
                                                 type="button"
                                                 onClick={startMigration}
-                                                disabled={state.migrationProgress?.inProgress || state.files.filter(f => f.selected).length === 0}
-                                                className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                                                disabled={!isCloudflareConnected || state.migrationProgress?.inProgress || state.files.filter(f => f.selected).length === 0}
+                                                className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-xs shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                                             >
                                                 {state.migrationProgress?.inProgress ? (
                                                     <>
@@ -426,7 +431,7 @@ export default function FileMigration({
                                                 )}
                                             </button>
                                         </div>
-                                        <div className="max-h-96 overflow-y-auto">
+                                        <div className="max-h-[62vh] overflow-y-auto">
                                             <table className="min-w-full divide-y divide-gray-200">
                                                 <thead className="bg-gray-50 sticky top-0 z-10">
                                                     <tr>
@@ -434,7 +439,7 @@ export default function FileMigration({
                                                             <th scope="col" className="sticky top-0 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                                 <input
                                                                     type="checkbox"
-                                                                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                                                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-xs"
                                                                     onChange={(e) => e.target.checked ? selectAll() : deselectAll()}
                                                                     checked={state.files.length > 0 && state.files.every(f => f.selected)}
                                                                 />
@@ -460,7 +465,7 @@ export default function FileMigration({
                                                                         type="checkbox"
                                                                         checked={file.selected}
                                                                         onChange={() => toggleFileSelection(file.path)}
-                                                                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                                                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-xs"
                                                                     />
                                                                 </td>
                                                             )}
@@ -470,12 +475,12 @@ export default function FileMigration({
                                                                         {file.path}
                                                                     </span>
                                                                     {isFileMigrated(file.path) && (
-                                                                        <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                                        <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-xs text-xs font-medium bg-green-100 text-green-800">
                                                                             Migrated
                                                                         </span>
                                                                     )}
                                                                     {isCurrentlyMigrating(file.path) && (
-                                                                        <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 animate-pulse">
+                                                                        <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-xs text-xs font-medium bg-amber-100 text-amber-800 animate-pulse">
                                                                             Migrating...
                                                                         </span>
                                                                     )}
@@ -494,7 +499,7 @@ export default function FileMigration({
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="flex justify-center items-center h-64 border-2 border-dashed border-gray-200 rounded-lg">
+                                    <div className="flex justify-center items-center min-h-[46vh] border-2 border-dashed border-gray-200 rounded-xs">
                                         <div className="text-center max-w-sm px-4">
                                             <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
@@ -507,7 +512,8 @@ export default function FileMigration({
                                                 <button
                                                     type="button"
                                                     onClick={loadFiles}
-                                                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                                    disabled={state.loading || !state.migrationService}
+                                                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-xs text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                                                 >
                                                     <svg xmlns="http://www.w3.org/2000/svg" className="mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -522,13 +528,13 @@ export default function FileMigration({
 
                             {/* Migration Overview - Right Side (takes 4/12 of the width) */}
                             <div className="lg:col-span-4">
-                                <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 overflow-y-auto h-full">
+                                <div className="bg-gray-50 rounded-xs border border-gray-200 p-4 overflow-y-auto h-full">
                                     <h3 className="text-sm font-medium text-gray-900 mb-3">Migration Overview</h3>
                                     
                                     {/* File Path Input */}
-                                    <div className="border border-gray-200 rounded-md bg-white p-3 mb-3">
+                                    <div className="border border-gray-200 rounded-xs bg-white p-3 mb-3">
                                         <h4 className="text-xs font-medium text-gray-500 uppercase mb-1">File Path</h4>
-                                        <div className="mt-1 flex rounded-md shadow-sm">
+                                        <div className="mt-1 flex rounded-xs shadow-sm">
                                             <div className="relative flex items-stretch flex-grow focus-within:z-10">
                                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
@@ -539,7 +545,7 @@ export default function FileMigration({
                                                 <input
                                                     type="text"
                                                     id="prefix"
-                                                    className="focus:ring-indigo-500 focus:border-indigo-500 block w-full rounded-none rounded-l-md pl-8 py-1.5 text-xs border-gray-300"
+                                                    className="focus:ring-indigo-500 focus:border-indigo-500 block w-full rounded-xs pl-8 py-1.5 text-xs border-gray-300"
                                                     value={state.prefix}
                                                     onChange={(e) => dispatch({ type: 'SET_PREFIX', payload: e.target.value })}
                                                     placeholder="Enter folder path (e.g. images/)"
@@ -554,8 +560,8 @@ export default function FileMigration({
                                             <button
                                                 type="button"
                                                 onClick={loadFiles}
-                                                disabled={state.loading}
-                                                className="-ml-px relative inline-flex items-center px-2 py-1.5 border border-gray-300 text-xs font-medium rounded-r-md text-gray-700 bg-gray-50 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                                                disabled={state.loading || !state.migrationService}
+                                                className="-ml-px relative inline-flex items-center px-2 py-1.5 border border-gray-300 text-xs font-medium rounded-xs text-gray-700 bg-gray-50 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                                             >
                                                 {state.loading ? (
                                                     <>
@@ -598,11 +604,11 @@ export default function FileMigration({
                                             </p>
                                         </div>
                                     ) : (
-                                        <div className="border border-gray-200 rounded-md bg-white p-4 mb-2">
+                                        <div className="border border-gray-200 rounded-xs bg-white p-4 mb-2">
                                             <h4 className="text-sm font-medium text-gray-900 mb-2">Migration Status</h4>
                                             
                                             {state.currentlyMigratingFile && (
-                                                <div className="mb-2 p-2 bg-amber-50 border border-amber-100 rounded text-sm">
+                                                <div className="mb-2 p-2 bg-amber-50 border border-amber-100 rounded-xs text-sm">
                                                     <div className="flex items-center">
                                                         <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-amber-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -628,8 +634,8 @@ export default function FileMigration({
                                                         </span>
                                                     </div>
                                                 </div>
-                                                <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
-                                                    <div className="flex h-full rounded-full overflow-hidden">
+                                                <div className="w-full bg-gray-200 rounded-xs h-2.5 mb-2">
+                                                    <div className="flex h-full rounded-xs overflow-hidden">
                                                         <div
                                                             style={{ width: `${state.migrationProgress ? 
                                                                 Math.round(state.migrationProgress.completed / state.migrationProgress.total * 100) : 0}%` }}
@@ -645,15 +651,15 @@ export default function FileMigration({
                                             </div>
                                             
                                             <div className="grid grid-cols-3 gap-2 text-center mb-2">
-                                                <div className="bg-gray-50 rounded p-2">
+                                                <div className="bg-gray-50 rounded-xs p-2">
                                                     <p className="text-sm font-medium text-gray-900">{state.migrationProgress?.total || 0}</p>
                                                     <p className="text-xs text-gray-500">Current Batch</p>
                                                 </div>
-                                                <div className="bg-green-50 rounded p-2">
+                                                <div className="bg-green-50 rounded-xs p-2">
                                                     <p className="text-sm font-medium text-green-600">{state.migrationProgress?.completed || 0}</p>
                                                     <p className="text-xs text-gray-500">Completed</p>
                                                 </div>
-                                                <div className="bg-red-50 rounded p-2">
+                                                <div className="bg-red-50 rounded-xs p-2">
                                                     <p className="text-sm font-medium text-red-600">{state.migrationProgress?.failed || 0}</p>
                                                     <p className="text-xs text-gray-500">Failed</p>
                                                 </div>
@@ -661,11 +667,11 @@ export default function FileMigration({
 
                                             <div className="border-t border-gray-200 pt-2 mt-2">
                                                 <div className="grid grid-cols-2 gap-2 text-center">
-                                                    <div className="bg-green-50 rounded p-2">
+                                                    <div className="bg-green-50 rounded-xs p-2">
                                                         <p className="text-sm font-medium text-green-600">{state.totalMigratedCount}</p>
                                                         <p className="text-xs text-gray-500">Total Migrated</p>
                                                     </div>
-                                                    <div className="bg-red-50 rounded p-2">
+                                                    <div className="bg-red-50 rounded-xs p-2">
                                                         <p className="text-sm font-medium text-red-600">{state.totalFailedCount}</p>
                                                         <p className="text-xs text-gray-500">Total Failed</p>
                                                     </div>
@@ -675,7 +681,7 @@ export default function FileMigration({
                                             {state.migrationProgress && Object.keys(state.migrationProgress.errors).length > 0 && (
                                                 <div className="mt-3">
                                                     <h5 className="text-sm font-medium text-gray-900 mb-1">Error Details</h5>
-                                                    <div className="bg-red-50 p-2 rounded border border-red-100 max-h-40 overflow-y-auto">
+                                                    <div className="bg-red-50 p-2 rounded-xs border border-red-100 max-h-64 overflow-y-auto">
                                                         <ul className="text-xs text-red-600">
                                                             {Object.entries(state.migrationProgress.errors).map(([path, error]) => (
                                                                 <li key={path} className="py-1 border-b border-red-100 last:border-0">
@@ -692,8 +698,6 @@ export default function FileMigration({
                                 </div>
                             </div>
                         </div>
-                    </>
-                )}
             </div>
         </div>
     );

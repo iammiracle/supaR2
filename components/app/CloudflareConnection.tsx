@@ -2,14 +2,13 @@
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useConnectionStore } from "@/lib/connection-store";
+import { Cloud, Plug, Unplug } from "lucide-react";
 
 export default function CloudflareConnection() {
   const {
-    cloudflareConfig,
     cloudflareConnected,
     editingCloudflareConfig,
     openCloudflareDialog,
-    isClientSide,
     
     setEditingCloudflareConfig,
     toggleCloudflareDialog,
@@ -18,40 +17,6 @@ export default function CloudflareConnection() {
   } = useConnectionStore();
 
   return (
-    <div className="px-4 py-5 sm:p-6">
-      <h2 className="text-base font-bold text-gray-900">Cloudflare R2 Connection</h2>
-      <p className="mt-2 text-sm font-medium text-gray-500">
-        Connect to your Cloudflare R2 bucket to migrate files to.
-      </p>
-      
-      <div className="mt-4">
-        {isClientSide && cloudflareConnected ? (
-          <div className="mb-4 p-4 bg-gray-50 rounded-md">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-500">
-                <div><strong>Account ID:</strong> {cloudflareConfig.accountId}</div>
-                <div className="mt-2"><strong>Bucket:</strong> {cloudflareConfig.bucketName}</div>
-                <div className="mt-2"><strong>Custom Domain:</strong> {cloudflareConfig.customDomain}</div>
-              </div>
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                Connected
-              </span>
-            </div>
-          </div>
-        ) : (
-          <div className="mb-4 p-4 bg-gray-50 rounded-md">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-500">
-                Not connected to Cloudflare R2
-              </div>
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                Not Connected
-              </span>
-            </div>
-          </div>
-        )}
-        
-        <div className="flex space-x-2">
           <Dialog 
             open={openCloudflareDialog} 
             onOpenChange={(open) => toggleCloudflareDialog(open)}
@@ -59,9 +24,15 @@ export default function CloudflareConnection() {
             <DialogTrigger asChild>
               <button
                 type="button"
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="relative inline-flex h-10 w-10 items-center justify-center rounded-xs text-muted-foreground transition hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring/50"
+                aria-label={cloudflareConnected ? "Edit Cloudflare R2 settings" : "Connect Cloudflare R2 destination"}
+                title={cloudflareConnected ? "Cloudflare R2 connected" : "Connect Cloudflare R2"}
               >
-                {cloudflareConnected ? "Edit Connection" : "Connect to Cloudflare R2"}
+                <Cloud className="h-4 w-4" aria-hidden="true" />
+                <span
+                  className={`absolute right-1.5 top-1.5 h-2 w-2 rounded-xs ${cloudflareConnected ? "bg-orange-400" : "bg-neutral-600"}`}
+                  aria-hidden="true"
+                />
               </button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-lg">
@@ -76,7 +47,7 @@ export default function CloudflareConnection() {
                   <input
                     type="text"
                     id="accountId"
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-xs shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     value={editingCloudflareConfig.accountId}
                     onChange={(e) => setEditingCloudflareConfig({ accountId: e.target.value })}
                     placeholder="your-account-id"
@@ -90,7 +61,7 @@ export default function CloudflareConnection() {
                   <input
                     type="text"
                     id="accessKeyId"
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-xs shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     value={editingCloudflareConfig.accessKeyId}
                     onChange={(e) => setEditingCloudflareConfig({ accessKeyId: e.target.value })}
                     placeholder="your-access-key-id"
@@ -104,7 +75,7 @@ export default function CloudflareConnection() {
                   <input
                     type="password"
                     id="secretAccessKey"
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-xs shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     value={editingCloudflareConfig.secretAccessKey}
                     onChange={(e) => setEditingCloudflareConfig({ secretAccessKey: e.target.value })}
                     placeholder="your-secret-access-key"
@@ -118,7 +89,7 @@ export default function CloudflareConnection() {
                   <input
                     type="text"
                     id="r2BucketName"
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-xs shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     value={editingCloudflareConfig.bucketName}
                     onChange={(e) => setEditingCloudflareConfig({ bucketName: e.target.value })}
                     placeholder="your-r2-bucket-name"
@@ -126,49 +97,58 @@ export default function CloudflareConnection() {
                 </div>
 
                 <div>
-                  <label htmlFor="customDomain" className="block text-sm font-medium text-gray-700">
-                    Custom Domain (Optional)
+                  <label htmlFor="publicUrlPattern" className="block text-sm font-medium text-gray-700">
+                    Public URL Pattern (Optional)
                   </label>
-                  <div className="mt-1 flex rounded-md shadow-sm">
-                    <span className="inline-flex items-center px-3 py-2 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
-                      https://
-                    </span>
-                    <input
-                      type="text"
-                      id="customDomain"
-                      className="flex-1 min-w-0 block w-full px-3 py-2 rounded-none rounded-r-md border border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      value={editingCloudflareConfig.customDomain || ''}
-                      onChange={(e) => setEditingCloudflareConfig({ customDomain: e.target.value })}
-                      placeholder="comechop"
-                    />
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500">Enter your domain name without https:// prefix</p>
+                  <input
+                    type="text"
+                    id="publicUrlPattern"
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-xs shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    value={editingCloudflareConfig.publicUrlPattern || ''}
+                    onChange={(e) => setEditingCloudflareConfig({ publicUrlPattern: e.target.value })}
+                    placeholder="https://assets.example.com/{path}"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Required for table URL rewrites. Use {'{path}'} where the object key should go.</p>
+                </div>
+
+                <div>
+                  <label htmlFor="customDomain" className="block text-sm font-medium text-gray-700">
+                    Public Domain Fallback (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    id="customDomain"
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-xs shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    value={editingCloudflareConfig.customDomain || ''}
+                    onChange={(e) => setEditingCloudflareConfig({ customDomain: e.target.value })}
+                    placeholder="https://assets.example.com"
+                  />
                 </div>
                 
-                <div className="pt-4 flex justify-end">
+                <div className="pt-4 flex items-center justify-between gap-3">
+                  {cloudflareConnected ? (
+                    <button
+                      type="button"
+                      onClick={resetCloudflareConfig}
+                      className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-xs shadow-sm text-red-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                    >
+                      <Unplug className="mr-2 h-4 w-4" aria-hidden="true" />
+                      Disconnect
+                    </button>
+                  ) : (
+                    <span />
+                  )}
                   <button
                     type="button"
                     onClick={connectToCloudflare}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-xs shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                   >
+                    <Plug className="mr-2 h-4 w-4" aria-hidden="true" />
                     {cloudflareConnected ? "Update Connection" : "Connect"}
                   </button>
                 </div>
               </div>
             </DialogContent>
           </Dialog>
-          
-          {cloudflareConnected && (
-            <button
-              type="button"
-              onClick={resetCloudflareConfig}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-red-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-            >
-              Disconnect
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
   );
 } 

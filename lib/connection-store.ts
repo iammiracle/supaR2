@@ -4,8 +4,6 @@ import { toast } from 'sonner';
 import { 
     SupabaseConfig, 
     CloudflareConfig, 
-    saveSupabaseConfig, 
-    saveCloudflareConfig,
     CloudflareConfigSchema,
     initSupabaseClientForAuth
 } from './storage-utils';
@@ -62,6 +60,8 @@ const DEFAULT_SUPABASE_CONFIG: SupabaseConfig = {
     supabaseUrl: '',
     supabaseKey: '',
     bucketName: '',
+    tableName: '',
+    primaryKeyColumn: 'id',
 };
 
 const DEFAULT_CLOUDFLARE_CONFIG: CloudflareConfig = {
@@ -69,6 +69,7 @@ const DEFAULT_CLOUDFLARE_CONFIG: CloudflareConfig = {
     accessKeyId: '',
     secretAccessKey: '',
     bucketName: '',
+    publicUrlPattern: '',
     customDomain: '',
 };
 
@@ -122,9 +123,6 @@ export const useConnectionStore = create<ConnectionState>()(
             
             setMigrationMode: (mode) => {
                 set({ migrationMode: mode });
-                if (typeof window !== 'undefined') {
-                    localStorage.setItem('migration_mode', mode);
-                }
             },
             
             setTempMigrationMode: (mode) => 
@@ -133,8 +131,8 @@ export const useConnectionStore = create<ConnectionState>()(
             toggleSupabaseDialog: (open) => 
                 set((state) => ({
                     openSupabaseDialog: open !== undefined ? open : !state.openSupabaseDialog,
-                    // Reset editing config to current config when opening dialog
                     editingSupabaseConfig: open !== false ? { ...state.supabaseConfig } : state.editingSupabaseConfig,
+                    tempMigrationMode: open !== false ? state.migrationMode : state.tempMigrationMode,
                 })),
             
             toggleCloudflareDialog: (open) => 
@@ -165,8 +163,28 @@ export const useConnectionStore = create<ConnectionState>()(
                 });
             },
             
-            setClientSide: (isClient) => 
-                set({ isClientSide: isClient }),
+            setClientSide: (isClient) => {
+                if (isClient && typeof window !== 'undefined') {
+                    localStorage.removeItem('supabase_config');
+                    localStorage.removeItem('cloudflare_config');
+                    localStorage.removeItem('migration_mode');
+
+                    const persistedState = localStorage.getItem('connection-storage');
+                    if (persistedState) {
+                        try {
+                            const parsed = JSON.parse(persistedState) as { state?: Partial<ConnectionState> };
+                            const migrationMode = parsed.state?.migrationMode === 'table' ? 'table' : 'file';
+                            localStorage.setItem('connection-storage', JSON.stringify({
+                                state: { migrationMode },
+                                version: 2,
+                            }));
+                        } catch {
+                            localStorage.removeItem('connection-storage');
+                        }
+                    }
+                }
+                set({ isClientSide: isClient });
+            },
             
             setAvailableBuckets: (buckets) => 
                 set({ availableBuckets: buckets }),
@@ -180,55 +198,66 @@ export const useConnectionStore = create<ConnectionState>()(
             // Complex actions
             connectToSupabase: async () => {
                 const state = get();
+                const mode = state.tempMigrationMode;
+                const nextConfig: SupabaseConfig = {
+                    ...state.editingSupabaseConfig,
+                    bucketName: state.editingSupabaseConfig.bucketName.trim(),
+                    tableName: state.editingSupabaseConfig.tableName?.trim() || '',
+                    primaryKeyColumn: state.editingSupabaseConfig.primaryKeyColumn?.trim() || 'id',
+                };
                 
                 try {
-                    // Validate that we have required credentials from the editing state
-                    if (!state.editingSupabaseConfig.supabaseUrl || !state.editingSupabaseConfig.supabaseKey) {
+                    if (!nextConfig.supabaseUrl || !nextConfig.supabaseKey) {
                         toast.error("Supabase URL and API Key are required");
                         return;
                     }
                     
-                    // Also validate bucket name from editing state
-                    if (!state.editingSupabaseConfig.bucketName) {
-                        toast.error("Bucket name is required");
+                    if (!nextConfig.bucketName) {
+                        toast.error("Storage bucket name is required");
+                        return;
+                    }
+
+                    if (mode === 'table' && !nextConfig.tableName) {
+                        toast.error("Table name is required for table migrations");
                         return;
                     }
                     
-                    // Update migration mode
-                    state.setMigrationMode(state.tempMigrationMode);
-                    
-                    // Apply the editing config to the actual config
-                    state.applyEditingSupabaseConfig();
-                    
-                    // Choose the appropriate server action based on migration mode
-                    let result;
                     try {
-                        if (state.tempMigrationMode === 'table') {
-                            // Use the table validation for table mode
-                            result = await connectToSupabaseTable(
-                                state.editingSupabaseConfig.supabaseUrl,
-                                state.editingSupabaseConfig.supabaseKey,
-                                state.editingSupabaseConfig.bucketName
+                        const storageResult = await connectToSupabaseStorage(
+                            nextConfig.supabaseUrl,
+                            nextConfig.supabaseKey,
+                            nextConfig.bucketName
+                        );
+
+                        if (!storageResult.success) {
+                            toast.error(storageResult.error || "Storage bucket not accessible");
+                            set({ supabaseConnected: false });
+                            return;
+                        }
+
+                        if (mode === 'table') {
+                            const tableResult = await connectToSupabaseTable(
+                                nextConfig.supabaseUrl,
+                                nextConfig.supabaseKey,
+                                nextConfig.tableName as string
                             );
-                        } else {
-                            // Use the storage validation for file mode
-                            result = await connectToSupabaseStorage(
-                                state.editingSupabaseConfig.supabaseUrl,
-                                state.editingSupabaseConfig.supabaseKey,
-                                state.editingSupabaseConfig.bucketName
-                            );
+
+                            if (!tableResult.success) {
+                                toast.error(tableResult.error || "Table not accessible");
+                                set({ supabaseConnected: false });
+                                return;
+                            }
                         }
                     } catch (error) {
                         console.error("Error connecting to Supabase resource:", error);
-                        // Provide a more helpful error message, especially for empty error objects
                         let errorMessage = "Failed to connect";
                         
                         if (error instanceof Error) {
                             errorMessage = error.message;
-                        } else if (state.tempMigrationMode === 'table') {
-                            errorMessage = `Table "${state.editingSupabaseConfig.bucketName}" may not exist or you don't have permission to access it.`;
+                        } else if (mode === 'table') {
+                            errorMessage = `Storage bucket "${nextConfig.bucketName}" or table "${nextConfig.tableName}" may not be accessible.`;
                         } else {
-                            errorMessage = `Storage bucket "${state.editingSupabaseConfig.bucketName}" may not exist or you don't have permission to access it.`;
+                            errorMessage = `Storage bucket "${nextConfig.bucketName}" may not be accessible.`;
                         }
                         
                         toast.error(errorMessage);
@@ -236,64 +265,37 @@ export const useConnectionStore = create<ConnectionState>()(
                         return;
                     }
                     
-                    if (!result.success) {
-                        // Enhance the error message for failed connections
-                        let errorMessage = result.error || 'Failed to connect';
-                        
-                        // Add more context if the error is empty or generic
-                        if (!result.error || result.error === '{}') {
-                            if (state.tempMigrationMode === 'table') {
-                                errorMessage = `Table "${state.editingSupabaseConfig.bucketName}" may not exist or you don't have permission to access it.`;
-                            } else {
-                                errorMessage = `Storage bucket "${state.editingSupabaseConfig.bucketName}" may not exist or you don't have permission to access it.`;
-                            }
-                        }
-                        
-                        toast.error(errorMessage);
-                        set({ supabaseConnected: false });
-                        return;
-                    }
-                    
-                    // Fetch available buckets for the dropdown only in file mode
-                    if (state.tempMigrationMode === 'file') {
+                    if (mode === 'file') {
                         try {
-                            // Use the auth-only client just for listing buckets
                             const supabase = initSupabaseClientForAuth({
-                                supabaseUrl: state.editingSupabaseConfig.supabaseUrl,
-                                supabaseKey: state.editingSupabaseConfig.supabaseKey
+                                supabaseUrl: nextConfig.supabaseUrl,
+                                supabaseKey: nextConfig.supabaseKey
                             });
                             
-                            // List available buckets
                             const { data, error } = await supabase.storage.listBuckets();
                             
                             if (error) {
-                                // This should rarely happen since we already validated the connection
                                 console.error("Error listing buckets:", error);
                             } else if (data) {
-                                // Set available buckets
                                 set({ availableBuckets: data.map(bucket => bucket.name) });
                             }
                         } catch (bucketError) {
                             console.error("Error listing buckets:", bucketError);
-                            // Don't fail the connection for this, just log it
                         }
                     } else {
-                        // In table mode, we don't load available buckets from storage
                         set({ availableBuckets: [] });
                     }
                     
-                    // If we have a result, and it's successful, close the dialog and save the config
-                    saveSupabaseConfig(state.supabaseConfig);
-                    
-                    // Success message
-                    if (state.tempMigrationMode === 'table') {
-                        toast.success(`Connected to Supabase table: ${state.supabaseConfig.bucketName}`);
+                    if (mode === 'table') {
+                        toast.success(`Connected to Supabase table: ${nextConfig.tableName}`);
                     } else {
-                        toast.success(`Connected to Supabase bucket: ${state.supabaseConfig.bucketName}`);
+                        toast.success(`Connected to Supabase bucket: ${nextConfig.bucketName}`);
                     }
                     
-                    // Update connection state
                     set({ 
+                        supabaseConfig: nextConfig,
+                        migrationMode: mode,
+                        tempMigrationMode: mode,
                         supabaseConnected: true,
                         openSupabaseDialog: false
                     });
@@ -308,11 +310,9 @@ export const useConnectionStore = create<ConnectionState>()(
                 const state = get();
                 
                 try {
-                    // Validate Cloudflare config using Zod
                     const validationResult = CloudflareConfigSchema.safeParse(state.editingCloudflareConfig);
                     
                     if (!validationResult.success) {
-                        // Extract error message from Zod validation result
                         const errors = validationResult.error.errors;
                         const errorMessage = errors.length > 0 
                             ? errors[0].message 
@@ -322,16 +322,14 @@ export const useConnectionStore = create<ConnectionState>()(
                         return;
                     }
                     
-                    // Apply the editing config to the actual config
-                    state.applyEditingCloudflareConfig();
+                    const nextConfig = validationResult.data;
                     
-                    // Try connecting to R2
                     try {
                         const result = await connectToR2(
-                            state.cloudflareConfig.accountId,
-                            state.cloudflareConfig.accessKeyId,
-                            state.cloudflareConfig.secretAccessKey,
-                            state.cloudflareConfig.bucketName
+                            nextConfig.accountId,
+                            nextConfig.accessKeyId,
+                            nextConfig.secretAccessKey,
+                            nextConfig.bucketName
                         );
                         
                         if (!result.success) {
@@ -352,12 +350,9 @@ export const useConnectionStore = create<ConnectionState>()(
                         return;
                     }
                     
-                    // If connection is successful, save the config
-                    saveCloudflareConfig(state.cloudflareConfig);
-                    
-                    // Update UI state
-                    toast.success(`Connected to Cloudflare R2 bucket: ${state.cloudflareConfig.bucketName}`);
+                    toast.success(`Connected to Cloudflare R2 bucket: ${nextConfig.bucketName}`);
                     set({ 
+                        cloudflareConfig: nextConfig,
                         cloudflareConnected: true,
                         openCloudflareDialog: false
                     });
@@ -370,14 +365,16 @@ export const useConnectionStore = create<ConnectionState>()(
         }),
         {
             name: 'connection-storage',
+            version: 2,
             partialize: (state) => ({
-                // Only persist these values
-                supabaseConfig: state.supabaseConfig,
-                cloudflareConfig: state.cloudflareConfig,
-                supabaseConnected: state.supabaseConnected,
-                cloudflareConnected: state.cloudflareConnected,
                 migrationMode: state.migrationMode,
             }),
+            migrate: (persistedState) => {
+                const state = persistedState as Partial<ConnectionState> | undefined;
+                return {
+                    migrationMode: state?.migrationMode === 'table' ? 'table' : 'file',
+                };
+            },
         }
     )
 ); 

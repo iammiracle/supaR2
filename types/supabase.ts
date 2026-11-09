@@ -4,6 +4,8 @@ export interface SupabaseConfig {
   supabaseUrl: string;
   supabaseKey: string;
   bucketName: string;
+  tableName?: string;
+  primaryKeyColumn?: string;
   isConnected?: boolean;
 }
 

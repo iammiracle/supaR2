@@ -71,21 +71,12 @@ export class MigrationService {
     }
 
     /**
-     * Check if a path should be skipped (test data, example data, etc.)
+     * Supabase uses placeholder objects for empty folders; skip those, but do not
+     * guess at user-owned "test" or "sample" paths.
      */
     private shouldSkipPath(path: string): boolean {
-        // Skip paths containing test or example data indicators
         const skipPatterns = [
             '.emptyFolderPlaceholder',
-            'test-',
-            'mock-',
-            'example',
-            '/example',
-            '/examples/',
-            'sample-',
-            '/sample/',
-            '/test/',
-            '/testing/'
         ];
         
         return skipPatterns.some(pattern => path.includes(pattern));
@@ -273,9 +264,9 @@ export class MigrationService {
      */
     private async migrateFile(path: string): Promise<void> {
         try {
-            // Skip example or test files
+            // Skip Supabase placeholder objects.
             if (this.shouldSkipPath(path)) {
-                console.log(`Skipping example/test file: ${path}`);
+                console.log(`Skipping placeholder object: ${path}`);
                 this.progress.completed++;
                 return;
             }

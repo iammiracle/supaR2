@@ -1,5 +1,3 @@
-"use client";
-
 import { createClient } from '@supabase/supabase-js';
 import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
 import { z } from 'zod';
@@ -9,7 +7,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 export const SupabaseConfigSchema = z.object({
     supabaseUrl: z.string().url('Invalid Supabase URL'),
     supabaseKey: z.string().min(1, 'Supabase service role key is required'),
-    bucketName: z.string().min(1, 'Bucket name is required')
+    bucketName: z.string().min(1, 'Storage bucket name is required'),
+    tableName: z.string().optional(),
+    primaryKeyColumn: z.string().optional(),
 });
 
 export const CloudflareConfigSchema = z.object({
@@ -23,12 +23,6 @@ export const CloudflareConfigSchema = z.object({
 
 export type SupabaseConfig = z.infer<typeof SupabaseConfigSchema>;
 export type CloudflareConfig = z.infer<typeof CloudflareConfigSchema>;
-
-// Local storage keys
-const STORAGE_KEYS = {
-    SUPABASE_CONFIG: 'supabase_config',
-    CLOUDFLARE_CONFIG: 'cloudflare_config',
-};
 
 // Initialize Supabase client - without bucket validation
 const authClientCache: Record<string, SupabaseClient> = {};
@@ -124,83 +118,3 @@ export async function checkR2BucketExists(client: S3Client, bucketName: string):
         return false;
     }
 }
-
-// Save Supabase configuration to localStorage
-export function saveSupabaseConfig(config: SupabaseConfig) {
-    if (typeof window !== 'undefined') {
-        localStorage.setItem(STORAGE_KEYS.SUPABASE_CONFIG, JSON.stringify(config));
-    }
-}
-
-// Load Supabase configuration from localStorage
-export function loadSupabaseConfig(): SupabaseConfig | null {
-    if (typeof window !== 'undefined') {
-        const config = localStorage.getItem(STORAGE_KEYS.SUPABASE_CONFIG);
-        if (config) {
-            try {
-                return JSON.parse(config) as SupabaseConfig;
-            } catch (e) {
-                console.error('Failed to parse Supabase config:', e);
-            }
-        }
-    }
-    return null;
-}
-
-// Save Cloudflare configuration to localStorage
-export function saveCloudflareConfig(config: CloudflareConfig) {
-    if (typeof window !== 'undefined') {
-        localStorage.setItem(STORAGE_KEYS.CLOUDFLARE_CONFIG, JSON.stringify(config));
-    }
-}
-
-// Load Cloudflare configuration from localStorage
-export function loadCloudflareConfig(): CloudflareConfig | null {
-    if (typeof window !== 'undefined') {
-        const config = localStorage.getItem(STORAGE_KEYS.CLOUDFLARE_CONFIG);
-        if (config) {
-            try {
-                return JSON.parse(config) as CloudflareConfig;
-            } catch (e) {
-                console.error('Failed to parse Cloudflare config:', e);
-            }
-        }
-    }
-    return null;
-}
-
-// Get environment variable or fallback
-export function getEnvVar(key: string, fallback: string = ''): string {
-    if (typeof process !== 'undefined' && process.env) {
-        return process.env[key] || fallback;
-    }
-    return fallback;
-}
-
-// Load migration mode from localStorage
-export function loadMigrationMode(): string {
-    if (typeof window !== 'undefined') {
-        return localStorage.getItem('migration_mode') || 'files';
-    }
-    return 'files';
-}
-
-// Load configs from environment variables if available (and not in localStorage)
-export function getSupabaseConfigFromEnv(): Partial<SupabaseConfig> {
-    return {
-        supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-        supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-        bucketName: process.env.NEXT_PUBLIC_SUPABASE_BUCKET_NAME || '',
-    };
-}
-
-export function getCloudflareConfigFromEnv(): Partial<CloudflareConfig> {
-    return {
-        accountId: process.env.NEXT_PUBLIC_CLOUDFLARE_ACCOUNT_ID || '',
-        accessKeyId: process.env.NEXT_PUBLIC_CLOUDFLARE_ACCESS_KEY_ID || '',
-        secretAccessKey: process.env.NEXT_PUBLIC_CLOUDFLARE_SECRET_ACCESS_KEY || '',
-        bucketName: process.env.NEXT_PUBLIC_CLOUDFLARE_BUCKET_NAME || '',
-        publicUrlPattern: process.env.NEXT_PUBLIC_CLOUDFLARE_PUBLIC_URL_PATTERN || '',
-        customDomain: process.env.NEXT_PUBLIC_CLOUDFLARE_CUSTOM_DOMAIN || '',
-    };
-} 
