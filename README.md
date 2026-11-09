@@ -19,7 +19,7 @@ SupaR2 asks for high-privilege credentials, so treat it like a local admin tool.
 
 ## Requirements
 
-- Node.js 18 or newer
+- Node.js 20.9 or newer
 - A Supabase project with Storage enabled
 - A Cloudflare R2 bucket
 - R2 API credentials with access to the target bucket
